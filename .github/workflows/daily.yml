@@ -1,0 +1,56 @@
+name: 쇼츠 자동화 파이프라인
+
+on:
+  schedule:
+    # 매일 오전 6시 KST = UTC 21시 (전날)
+    - cron: '0 21 * * *'
+  workflow_dispatch: # 수동 실행 가능
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Node.js 설정
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: FFmpeg 설치
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: 의존성 설치
+        run: npm ci
+
+      - name: output 디렉토리 생성
+        run: mkdir -p output/logs output/voices output/videos output/thumbnails
+
+      - name: 파이프라인 실행
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+          CANVA_API_KEY: ${{ secrets.CANVA_API_KEY }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
+          DAILY_MBTI_COUNT: '5'
+          DAILY_SAJU_COUNT: '5'
+          OUTPUT_DIR: './output'
+          LOG_DIR: './output/logs'
+        run: node src/pipeline.js
+
+      - name: 로그 업로드 (실패 시에도)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-logs-${{ github.run_number }}
+          path: output/logs/
+          retention-days: 7
